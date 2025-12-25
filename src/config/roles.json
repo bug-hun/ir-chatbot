@@ -1,0 +1,42 @@
+{
+  "roles": {
+    "ADMIN": {
+      "description": "Full administrative access",
+      "permissions": ["help", "status", "quarantine", "collect", "kill", "memdump", "manage_users"]
+    },
+    "IR_ANALYST": {
+      "description": "Incident Response analyst - can execute all IR commands",
+      "permissions": ["help", "status", "quarantine", "collect", "kill", "memdump"]
+    },
+    "SOC_TIER2": {
+      "description": "SOC Tier 2 analyst - can collect logs and view status",
+      "permissions": ["help", "status", "collect"]
+    },
+    "SOC_TIER1": {
+      "description": "SOC Tier 1 analyst - read-only access",
+      "permissions": ["help", "status"]
+    }
+  },
+  "users": {
+    "EXAMPLE_SLACK_USER_ID": {
+      "role": "ADMIN",
+      "name": "Admin User",
+      "comment": "Replace EXAMPLE_SLACK_USER_ID with actual Slack user IDs"
+    }
+  },
+  "defaultRole": "SOC_TIER1",
+  "requireAuthentication": false,
+  "_instructions": {
+    "how_to_find_slack_user_id": [
+      "1. In Slack, click on a user's profile",
+      "2. Click the three dots (...) menu",
+      "3. Select 'Copy member ID'",
+      "4. The ID looks like: U01ABC123XY"
+    ],
+    "how_to_add_users": [
+      "Add entries to the 'users' object above",
+      "Key: Slack User ID",
+      "Value: { role: 'ROLE_NAME', name: 'Display Name' }"
+    ]
+  }
+}
