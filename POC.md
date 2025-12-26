@@ -391,34 +391,6 @@ ALLOWED_MANAGEMENT_IPS=192.168.1.3,192.168.1.1
 
 ---
 
-## Interview Q&A
-
-### Technical Questions
-
-**Q: Why did you choose Socket Mode instead of Events API?**
-> "Socket Mode doesn't require a public endpoint, making it firewall-friendly for internal security tools"
-
-**Q: How does the quarantine actually work?**
-> "It sets Windows Firewall DefaultOutboundAction to Block, then creates Allow rules only for management IPs. DNS is redirected to localhost to prevent resolution, and SMB services are stopped to prevent lateral movement"
-
-**Q: What happens if the management IP is blocked too?**
-> "I solved this by using Default Block action instead of explicit Block rules. In Windows Firewall, Allow rules can override Default actions but not explicit Block rules"
-
-**Q: How do you handle credential security?**
-> "Credentials are stored in .env which is git-ignored, and they're escaped before injection into PowerShell commands to prevent injection attacks"
-
-**Q: What forensic artifacts do you collect?**
-> "Security event logs (logons, process creation), System/Application logs, PowerShell command history, Prefetch files for execution evidence, browser history, and network configuration"
-
-### Behavioral Questions
-
-**Q: What was the hardest part of this project?**
-> "Getting the quarantine to work correctly - initially my explicit Block rules were overriding the Allow rules for management IPs. I had to understand Windows Firewall rule precedence to fix it"
-
-**Q: How would you improve this tool?**
-> "Add pre-flight checks before quarantine, support for Linux endpoints via SSH, integration with SIEM for automated response, and a web dashboard for non-Slack users"
-
----
 
 ## VM-Side Verification Commands
 
