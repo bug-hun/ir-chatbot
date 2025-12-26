@@ -166,13 +166,6 @@ The quarantine uses Windows Firewall Default Block strategy:
 
 This approach ensures management connectivity is maintained while blocking all other outbound traffic.
 
-## Documentation
-
-See [POC.md](docs/POC.md) for detailed documentation including:
-- Network environment setup
-- Slack app configuration
-- Interview Q&A for technical discussions
-- Video demo script
 
 ## Requirements
 
