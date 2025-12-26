@@ -1,18 +1,21 @@
 {
   "targets": {
     "vm1": {
-      "ip": "192.168.1.33",
-      "description": "Test VM 1",
+      "ip": "192.168.100.10",
+      "description": "Example Target VM 1",
       "os": "Windows"
     },
     "vm2": {
-      "ip": "192.168.1.34",
-      "description": "Test VM 2",
+      "ip": "192.168.100.11",
+      "description": "Example Target VM 2",
       "os": "Windows"
     }
   },
-  "aliases": {},
+  "aliases": {
+    "workstation": "vm1",
+    "server": "vm2"
+  },
   "managementIPs": [
-    "192.168.1.1"
+    "192.168.100.1"
   ]
 }

@@ -24,6 +24,29 @@ const { checkPermission, getUserRole } = require('../middleware/authMiddleware')
 const BOT_NAME = 'IR Playbook Bot';
 const BOT_VERSION = '1.0.0';
 
+// Incident tracking storage (in-memory)
+const incidents = new Map();
+const MAX_INCIDENTS = 50;
+
+function storeIncident(incidentId, data) {
+    incidents.set(incidentId, {
+        ...data,
+        timestamp: new Date().toISOString()
+    });
+    // Keep only last MAX_INCIDENTS
+    if (incidents.size > MAX_INCIDENTS) {
+        const oldest = incidents.keys().next().value;
+        incidents.delete(oldest);
+    }
+}
+
+function getRecentIncidents(limit = 10) {
+    return Array.from(incidents.entries())
+        .slice(-limit)
+        .reverse()
+        .map(([id, data]) => ({ id, ...data }));
+}
+
 // Status indicators for visual feedback
 const STATUS = {
     SUCCESS: ':white_check_mark:',
@@ -160,6 +183,9 @@ function createSlackApp() {
                 case 'release':
                     await handleRelease(respond, userId, userName, target, psService, auditService, command.text);
                     break;
+                case 'incidents':
+                    await handleIncidents(respond, userName);
+                    break;
                 default:
                     await respond({
                         response_type: 'ephemeral',
@@ -231,6 +257,8 @@ function createSlackApp() {
                 details: result
             });
 
+            storeIncident(incidentId, { action: 'QUARANTINE', userId, userName, target, status: 'SUCCESS' });
+
             await respond({
                 replace_original: true,
                 blocks: [
@@ -293,12 +321,15 @@ function createSlackApp() {
             });
 
         } catch (error) {
+            const failedIncidentId = generateIncidentId();
             await auditService.log({
                 action: 'QUARANTINE',
                 userId, userName, target,
                 status: 'FAILED',
                 error: error.message
             });
+
+            storeIncident(failedIncidentId, { action: 'QUARANTINE', userId, userName, target, status: 'FAILED', error: error.message });
 
             await respond({
                 replace_original: true,
@@ -351,6 +382,8 @@ function createSlackApp() {
                 status: 'SUCCESS',
                 incidentId
             });
+
+            storeIncident(incidentId || generateIncidentId(), { action: 'RELEASE', userId, userName, target, status: 'SUCCESS' });
 
             await respond({
                 replace_original: true,
@@ -482,6 +515,8 @@ function createSlackApp() {
                 details: result
             });
 
+            storeIncident(generateIncidentId(), { action: 'KILL_PROCESS', userId: body.user.id, userName, target, status: 'SUCCESS', processId });
+
             await respond({
                 replace_original: true,
                 blocks: [
@@ -552,7 +587,8 @@ async function handleHelp(respond, userName) {
                         `*\`/ir status <target>\`*\n_Get system information including processes, connections, and persistence_\n\n` +
                         `*\`/ir quarantine <target>\`*\n_Isolate a host from the network (blocks all traffic except management)_\n\n` +
                         `*\`/ir release <target>\`*\n_Release a quarantined host and restore connectivity_\n\n` +
-                        `*\`/ir collect <target>\`*\n_Collect forensic logs and artifacts from the target system_`
+                        `*\`/ir collect <target>\`*\n_Collect forensic logs and artifacts from the target system_\n\n` +
+                        `*\`/ir incidents\`*\n_View recent incident activity_`
                 }
             },
             createDivider(),
@@ -578,6 +614,7 @@ async function handleHelp(respond, userName) {
                         '/ir status 192.168.1.33\n' +
                         '/ir quarantine IR-Target-01\n' +
                         '/ir collect 192.168.1.33\n' +
+                        '/ir incidents\n' +
                         '/ir kill 192.168.1.33 notepad\n' +
                         '/ir memdump 192.168.1.33 4532' +
                         '```'
@@ -861,6 +898,8 @@ async function handleRelease(respond, userId, userName, target, psService, audit
             incidentId
         });
 
+        storeIncident(incidentId, { action: 'RELEASE', userId, userName, target, status: 'SUCCESS' });
+
         await respond({
             response_type: 'ephemeral',
             blocks: [
@@ -902,6 +941,8 @@ async function handleRelease(respond, userId, userName, target, psService, audit
             incidentId,
             error: error.message
         });
+
+        storeIncident(incidentId, { action: 'RELEASE', userId, userName, target, status: 'FAILED', error: error.message });
 
         await respond({
             response_type: 'ephemeral',
@@ -975,6 +1016,8 @@ async function handleCollect(respond, userId, userName, target, psService, audit
         const resolvedTarget = psService.resolveTarget(target);
 
         await auditService.log({ action: 'COLLECT_LOGS', userId, userName, target, incidentId, status: 'SUCCESS', details: result });
+
+        storeIncident(incidentId, { action: 'COLLECT_LOGS', userId, userName, target, status: 'SUCCESS' });
 
         // Download to local collected-logs folder
         let localPath = '';
@@ -1059,6 +1102,8 @@ async function handleCollect(respond, userId, userName, target, psService, audit
 
     } catch (error) {
         await auditService.log({ action: 'COLLECT_LOGS', userId, userName, target, incidentId, status: 'FAILED', error: error.message });
+
+        storeIncident(incidentId, { action: 'COLLECT_LOGS', userId, userName, target, status: 'FAILED', error: error.message });
 
         await respond({
             response_type: 'ephemeral',
@@ -1167,6 +1212,8 @@ async function handleMemDump(respond, userId, userName, target, pid, psService, 
 
         await auditService.log({ action: 'MEMORY_DUMP', userId, userName, target, processId: pid, status: 'SUCCESS', details: result });
 
+        storeIncident(generateIncidentId(), { action: 'MEMORY_DUMP', userId, userName, target, status: 'SUCCESS', processId: pid });
+
         await respond({
             response_type: 'ephemeral',
             blocks: [
@@ -1187,6 +1234,8 @@ async function handleMemDump(respond, userId, userName, target, pid, psService, 
     } catch (error) {
         await auditService.log({ action: 'MEMORY_DUMP', userId, userName, target, processId: pid, status: 'FAILED', error: error.message });
 
+        storeIncident(generateIncidentId(), { action: 'MEMORY_DUMP', userId, userName, target, status: 'FAILED', processId: pid, error: error.message });
+
         await respond({
             response_type: 'ephemeral',
             blocks: [
@@ -1196,6 +1245,54 @@ async function handleMemDump(respond, userId, userName, target, pid, psService, 
             ]
         });
     }
+}
+
+async function handleIncidents(respond, userName) {
+    const recentIncidents = getRecentIncidents(10);
+
+    if (recentIncidents.length === 0) {
+        await respond({
+            response_type: 'ephemeral',
+            blocks: [
+                createHeader('Recent Incidents', STATUS.FOLDER),
+                createDivider(),
+                {
+                    type: 'section',
+                    text: { type: 'mrkdwn', text: '_No incidents recorded yet._\n\nIncidents are recorded when you execute actions like quarantine, release, collect, or kill.' }
+                },
+                createContext(`Requested by @${userName}`)
+            ]
+        });
+        return;
+    }
+
+    const blocks = [
+        createHeader('Recent Incidents', STATUS.FOLDER),
+        createDivider()
+    ];
+
+    for (const incident of recentIncidents) {
+        const statusIcon = incident.status === 'SUCCESS' ? STATUS.SUCCESS : STATUS.ERROR;
+        const timestamp = new Date(incident.timestamp).toLocaleString();
+
+        blocks.push({
+            type: 'section',
+            text: {
+                type: 'mrkdwn',
+                text: `${statusIcon} *\`${incident.id}\`*\n` +
+                    `*Action:* ${incident.action} | *Target:* \`${incident.target || 'N/A'}\`\n` +
+                    `*By:* @${incident.userName} | *Time:* ${timestamp}`
+            }
+        });
+    }
+
+    blocks.push(createDivider());
+    blocks.push(createContext(`Showing last ${recentIncidents.length} incidents | Requested by @${userName}`));
+
+    await respond({
+        response_type: 'ephemeral',
+        blocks
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
