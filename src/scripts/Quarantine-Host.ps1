@@ -19,7 +19,15 @@ if ($Isolate) {
     Write-Host "[*] Removing existing isolation rules..."
     Get-NetFirewallRule -DisplayName "IR-ISOLATION*" -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
 
-    # Step 3: Create ALLOW rules for management IPs FIRST (Windows evaluates Allow before Block)
+    # Step 3: Set DEFAULT actions to Block FIRST
+    # This is the key - Default actions are overridden by explicit Allow rules
+    # But explicit Block rules would override Allow rules (which we don't want)
+    Write-Host "[*] Setting default firewall actions to Block..."
+    Set-NetFirewallProfile -Profile Domain, Public, Private -DefaultOutboundAction Block
+    Set-NetFirewallProfile -Profile Domain, Public, Private -DefaultInboundAction Block
+
+    # Step 4: Create ALLOW rules for management IPs
+    # These Allow rules will override the Default Block action
     Write-Host "[*] Creating allow rules for management IPs: $($AllowedHosts -join ', ')..."
 
     # Allow inbound from management (for WinRM, RDP, SSH)
@@ -30,29 +38,8 @@ if ($Isolate) {
     New-NetFirewallRule -DisplayName "IR-ISOLATION-Allow-Mgmt-Outbound" -Direction Outbound `
         -Action Allow -RemoteAddress $AllowedHosts -Enabled True -Profile Any | Out-Null
 
-    # Step 4: Create EXPLICIT BLOCK rules for ALL traffic (these apply to non-whitelisted IPs)
-    Write-Host "[*] Creating explicit block rules for all other traffic..."
-
-    # Block ALL outbound TCP
-    New-NetFirewallRule -DisplayName "IR-ISOLATION-Block-TCP-Out" -Direction Outbound `
-        -Action Block -Protocol TCP -Enabled True -Profile Any | Out-Null
-
-    # Block ALL outbound UDP
-    New-NetFirewallRule -DisplayName "IR-ISOLATION-Block-UDP-Out" -Direction Outbound `
-        -Action Block -Protocol UDP -Enabled True -Profile Any | Out-Null
-
-    # Block ALL outbound ICMP (ping)
-    New-NetFirewallRule -DisplayName "IR-ISOLATION-Block-ICMP-Out" -Direction Outbound `
-        -Action Block -Protocol ICMPv4 -Enabled True -Profile Any | Out-Null
-
-    # NOTE: We do NOT create an explicit "Block All Inbound" rule because it would
-    # override our "Allow Management Inbound" rule. Instead, we rely on the
-    # DefaultInboundAction = Block setting, which works WITH explicit Allow rules.
-
-    # Step 5: Set default actions to Block (this works WITH Allow rules)
-    Write-Host "[*] Setting default firewall actions to Block..."
-    Set-NetFirewallProfile -Profile Domain, Public, Private -DefaultOutboundAction Block
-    Set-NetFirewallProfile -Profile Domain, Public, Private -DefaultInboundAction Block
+    # NOTE: We do NOT create explicit Block rules because they would override our Allow rules.
+    # The DefaultOutboundAction = Block handles blocking everything except whitelisted IPs.
 
     # Step 6: Clear DNS cache to prevent cached lookups
     Write-Host "[*] Clearing DNS cache..."
@@ -85,10 +72,9 @@ if ($Isolate) {
         Timestamp    = (Get-Date).ToString('o')
         Actions      = @(
             "Firewall enabled on all profiles",
-            "Explicit block rules created for TCP/UDP/ICMP",
-            "Management IPs whitelisted",
-            "Default actions set to Block",
-            "DNS cache cleared and redirected",
+            "Default outbound/inbound actions set to Block",
+            "Management IPs whitelisted: $($AllowedHosts -join ', ')",
+            "DNS cache cleared and redirected to localhost",
             "SMB services stopped"
         )
     } | ConvertTo-Json -Compress
